@@ -5,8 +5,7 @@ import win32api
 
 import get_all_files
 
-# TODO: RENAME THESE TO WHATEVER!!
-nfd = 'necessary_files' # necessary files directory
+nfd = 'necessary_files'  # necessary files directory
 drive_letter = "D:"
 
 
@@ -32,6 +31,10 @@ def run_command(command, verbose=False, powershell=False):
 
 
 def check_for_rpi_pico():
+    """
+    Checks if the pico is plugged in and returns what "state" it's in.
+    :return: volume_label either "RPI-RP2" or "CIRCUITPY"
+    """
     if os.path.exists(drive_letter):
         volume_label = win32api.GetVolumeInformation(drive_letter)[0]
 
@@ -71,7 +74,8 @@ def main():
         get_all_files.get_necessary_files()
 
     nfd_contents = os.listdir(nfd)
-    matching_files = [file for file in nfd_contents if file.startswith("adafruit-circuitpython-raspberry_pi_pico-en_GB")]
+    matching_files = [file for file in nfd_contents if
+                      file.startswith("adafruit-circuitpython-raspberry_pi_pico-en_GB")]
     if not matching_files:
         raise NotADirectoryError(f"Error with getting circuitpython main .uf2 . Are you sure it is in {nfd}/ ? "
                                  f"It should start with 'adafruit-circuitpython-raspberry_pi_pico-en_GB'")
