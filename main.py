@@ -108,9 +108,10 @@ def find_payload_file(payload_dir, payload_name=None):
 
 
 def copy_payload_to_pico(pico_drive, payload_dir, payload_name=None):
-    """Copy the selected payload onto the Pico root."""
+    """Copy the selected payload onto the Pico root as payload.dd."""
     payload_path = find_payload_file(payload_dir, payload_name)
-    copy_path(payload_path, pico_drive)
+    target_path = os.path.join(pico_drive, 'payload.dd')
+    copy_path(payload_path, target_path)
     return payload_path
 
 
