@@ -1,4 +1,5 @@
 import os
+import shutil
 import main
 
 nfd = main.nfd  # necessary files directory
@@ -57,10 +58,17 @@ def get_necessary_files():
         'adafruit_hid', 'adafruit_debouncer.mpy', 'adafruit_ticks.mpy', 'asyncio', 'adafruit_wsgi'
     ]
     for file in files_to_copy:
-        main.run_command(f"cp -r {nfd}/{circuitpython_bundle}/lib/{file} {nfd}", verbose=True)
+        src = os.path.join(nfd, circuitpython_bundle, 'lib', file)
+        dest = os.path.join(nfd, file)
+        if os.path.isdir(src):
+            shutil.copytree(src, dest, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dest)
 
     for script in ['boot.py', 'duckyinpython.py', 'code.py']:
-        main.run_command(f"cp {nfd}/pico-ducky-main/{script} {nfd}", verbose=True)
+        src = os.path.join(nfd, 'pico-ducky-main', script)
+        dest = os.path.join(nfd, script)
+        shutil.copy2(src, dest)
 
     urls = {
         "flash_nuke.uf2": "https://raw.githubusercontent.com/dwelch67/raspberrypi-pico/main/flash_nuke.uf2",

@@ -1,4 +1,5 @@
 import subprocess
+import shutil
 import time
 import os
 import win32api
@@ -73,6 +74,46 @@ def check_for_rpi_pico():
     return False, None
 
 
+def copy_path(source, destination, recursive=False):
+    """Copy a file or directory to a destination in a platform-safe way."""
+    if recursive:
+        target_path = os.path.join(destination, os.path.basename(source)) if os.path.isdir(destination) else destination
+        os.makedirs(os.path.dirname(target_path) if os.path.dirname(target_path) else '.', exist_ok=True)
+        shutil.copytree(source, target_path, dirs_exist_ok=True)
+        return target_path
+
+    target_path = destination if not os.path.isdir(destination) else os.path.join(destination, os.path.basename(source))
+    os.makedirs(os.path.dirname(target_path) if os.path.dirname(target_path) else '.', exist_ok=True)
+    shutil.copy2(source, target_path)
+    return target_path
+
+
+def find_payload_file(payload_dir, payload_name=None):
+    """Locate a payload file dynamically from a directory."""
+    if payload_name:
+        candidate = os.path.join(payload_dir, payload_name)
+        if os.path.isfile(candidate):
+            return candidate
+
+    payload_candidates = []
+    for entry in os.listdir(payload_dir):
+        if entry.lower().endswith('.dd') or entry.lower().endswith('.txt'):
+            payload_candidates.append(os.path.join(payload_dir, entry))
+
+    if not payload_candidates:
+        raise FileNotFoundError(f"No payload files found in {payload_dir}")
+
+    payload_candidates.sort()
+    return payload_candidates[0]
+
+
+def copy_payload_to_pico(pico_drive, payload_dir, payload_name=None):
+    """Copy the selected payload onto the Pico root."""
+    payload_path = find_payload_file(payload_dir, payload_name)
+    copy_path(payload_path, pico_drive)
+    return payload_path
+
+
 def update_duckyinpython_file(file_path):
     """
     Updates lines 23 and 24 in duckyinpython.py to change the keyboard layout and keycode imports to 'uk'.
@@ -92,7 +133,7 @@ def update_duckyinpython_file(file_path):
     print(f"Updated {file_path}: uncommented US layout and updated UK layout and keycode.")
 
 
-def main():
+def main(payload_dir='.', payload_name=None):
     if not get_all_files.check_for_necessary_files():
         get_all_files.get_necessary_files()
 
@@ -110,7 +151,7 @@ def main():
     if pico_state == 'RPI-RP2':
         print(f"Pico found at {pico_drive}, wiping it now!")
         if pico_drive and 'INDEX.HTM' in os.listdir(pico_drive) and 'INFO_UF2.TXT' in os.listdir(pico_drive):
-            run_command(f"cp {nfd}/flash_nuke.uf2 {pico_drive}")
+            copy_path(os.path.join(nfd, 'flash_nuke.uf2'), pico_drive)
 
     time.sleep(10)
     pico_state, pico_drive = check_for_rpi_pico()
@@ -119,23 +160,25 @@ def main():
     if pico_state == 'RPI-RP2':
         print(f"Pico found at {pico_drive}, copying {circuitpython_uf2_file} now to turn it into CIRCUITPY")
         if pico_drive and 'INDEX.HTM' in os.listdir(pico_drive) and 'INFO_UF2.TXT' in os.listdir(pico_drive):
-            run_command(f"cp {nfd}/{circuitpython_uf2_file} {pico_drive}")
+            copy_path(os.path.join(nfd, circuitpython_uf2_file), pico_drive)
 
     time.sleep(10)
     pico_state, pico_drive = check_for_rpi_pico()
     if pico_state == 'CIRCUITPY':
         print(f"Pico found at CIRCUITPY!! Now pasting everything from {nfd}/")
-        run_command(f"cp -r {nfd}/adafruit_hid {pico_drive}/lib")
-        run_command(f"cp {nfd}/adafruit_debouncer.mpy {pico_drive}/lib")
-        run_command(f"cp {nfd}/adafruit_ticks.mpy {pico_drive}/lib")
-        run_command(f"cp -r {nfd}/asyncio {pico_drive}/lib")
-        run_command(f"cp -r {nfd}/adafruit_wsgi {pico_drive}/lib")
-        run_command(f"cp {nfd}/boot.py {pico_drive}")
-        run_command(f"cp {nfd}/duckyinpython.py {pico_drive}")
-        run_command(f"cp {nfd}/code.py {pico_drive}")
-        run_command(f"cp {nfd}/keyboard_layout_win_uk.py {pico_drive}/lib")
-        run_command(f"cp {nfd}/keycode_win_uk.py {pico_drive}/lib")
-        update_duckyinpython_file(f"{pico_drive}/duckyinpython.py")
+        copy_path(os.path.join(nfd, 'adafruit_hid'), os.path.join(pico_drive, 'lib'), recursive=True)
+        copy_path(os.path.join(nfd, 'adafruit_debouncer.mpy'), os.path.join(pico_drive, 'lib'))
+        copy_path(os.path.join(nfd, 'adafruit_ticks.mpy'), os.path.join(pico_drive, 'lib'))
+        copy_path(os.path.join(nfd, 'asyncio'), os.path.join(pico_drive, 'lib'), recursive=True)
+        copy_path(os.path.join(nfd, 'adafruit_wsgi'), os.path.join(pico_drive, 'lib'), recursive=True)
+        copy_path(os.path.join(nfd, 'boot.py'), pico_drive)
+        copy_path(os.path.join(nfd, 'duckyinpython.py'), pico_drive)
+        copy_path(os.path.join(nfd, 'code.py'), pico_drive)
+        copy_path(os.path.join(nfd, 'keyboard_layout_win_uk.py'), os.path.join(pico_drive, 'lib'))
+        copy_path(os.path.join(nfd, 'keycode_win_uk.py'), os.path.join(pico_drive, 'lib'))
+        payload_path = copy_payload_to_pico(pico_drive, payload_dir, payload_name)
+        print(f"Copied payload {payload_path} to {pico_drive}")
+        update_duckyinpython_file(os.path.join(pico_drive, 'duckyinpython.py'))
 
 
 if __name__ == '__main__':
