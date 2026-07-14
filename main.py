@@ -6,7 +6,6 @@ import win32api
 import get_all_files
 
 nfd = 'necessary_files'  # necessary files directory
-drive_letter = "D:"
 
 
 def run_command(command, verbose=False, powershell=False):
@@ -30,24 +29,48 @@ def run_command(command, verbose=False, powershell=False):
         print(f"Command {command} failed with error: {e.stderr}")
 
 
+def get_available_drives():
+    """Return the logical drive paths available on the machine."""
+    try:
+        return [drive for drive in win32api.GetLogicalDriveStrings().split('\0') if drive]
+    except Exception as exc:
+        print(f"Unable to read drive list: {exc}")
+        return []
+
+
+def get_pico_drive():
+    """Find the drive letter for a mounted Raspberry Pi Pico."""
+    for drive in get_available_drives():
+        if not os.path.exists(drive):
+            continue
+
+        try:
+            volume_label = win32api.GetVolumeInformation(drive)[0]
+        except Exception:
+            continue
+
+        if volume_label in {"RPI-RP2", "CIRCUITPY"}:
+            return drive
+
+    return None
+
+
 def check_for_rpi_pico():
     """
     Checks if the pico is plugged in and returns what "state" it's in.
     :return: volume_label either "RPI-RP2" or "CIRCUITPY"
     """
-    if os.path.exists(drive_letter):
-        volume_label = win32api.GetVolumeInformation(drive_letter)[0]
+    pico_drive = get_pico_drive()
+    if pico_drive:
+        volume_label = win32api.GetVolumeInformation(pico_drive)[0]
+        if volume_label in {"RPI-RP2", "CIRCUITPY"}:
+            return volume_label, pico_drive
 
-        if volume_label == "RPI-RP2":
-            return volume_label
-        elif volume_label == "CIRCUITPY":
-            return volume_label
-        else:
-            print(f"Drive {drive_letter} found, but it's not a Raspberry Pi Pico (Label: {volume_label})")
+        print(f"Drive {pico_drive} found, but it's not a Raspberry Pi Pico (Label: {volume_label})")
     else:
-        print(f"Drive {drive_letter} not found.")
+        print("No Raspberry Pi Pico drive found. Hold BOOTSEL and plug in the Pico.")
 
-    return False
+    return False, None
 
 
 def update_duckyinpython_file(file_path):
@@ -81,35 +104,38 @@ def main():
                                  f"It should start with 'adafruit-circuitpython-raspberry_pi_pico-en_GB'")
     circuitpython_uf2_file = matching_files[0]
 
+    pico_state, pico_drive = check_for_rpi_pico()
+
     # wipe the pico
-    if check_for_rpi_pico() == 'RPI-RP2':
-        print(f"Pico found at RPI-RP2, wiping it now!")
-        # run_command("ls D:", verbose=True, powershell=True)
-        if 'INDEX.HTM' in os.listdir(drive_letter) and 'INFO_UF2.TXT' in os.listdir(drive_letter):
-            run_command(f"cp {nfd}/flash_nuke.uf2 {drive_letter}")
+    if pico_state == 'RPI-RP2':
+        print(f"Pico found at {pico_drive}, wiping it now!")
+        if pico_drive and 'INDEX.HTM' in os.listdir(pico_drive) and 'INFO_UF2.TXT' in os.listdir(pico_drive):
+            run_command(f"cp {nfd}/flash_nuke.uf2 {pico_drive}")
 
     time.sleep(10)
+    pico_state, pico_drive = check_for_rpi_pico()
+
     # make it into circuitpy
-    if check_for_rpi_pico() == 'RPI-RP2':
-        print(f"Pico found at RPI-RP2, copying {circuitpython_uf2_file} now to turn it into CIRCUITPY")
-        # run_command("ls D:", verbose=True, powershell=True)
-        if 'INDEX.HTM' in os.listdir(drive_letter) and 'INFO_UF2.TXT' in os.listdir(drive_letter):
-            run_command(f"cp {nfd}/{circuitpython_uf2_file} {drive_letter}")
+    if pico_state == 'RPI-RP2':
+        print(f"Pico found at {pico_drive}, copying {circuitpython_uf2_file} now to turn it into CIRCUITPY")
+        if pico_drive and 'INDEX.HTM' in os.listdir(pico_drive) and 'INFO_UF2.TXT' in os.listdir(pico_drive):
+            run_command(f"cp {nfd}/{circuitpython_uf2_file} {pico_drive}")
 
     time.sleep(10)
-    if check_for_rpi_pico() == 'CIRCUITPY':
+    pico_state, pico_drive = check_for_rpi_pico()
+    if pico_state == 'CIRCUITPY':
         print(f"Pico found at CIRCUITPY!! Now pasting everything from {nfd}/")
-        run_command(f"cp -r {nfd}/adafruit_hid {drive_letter}/lib")
-        run_command(f"cp {nfd}/adafruit_debouncer.mpy {drive_letter}/lib")
-        run_command(f"cp {nfd}/adafruit_ticks.mpy {drive_letter}/lib")
-        run_command(f"cp -r {nfd}/asyncio {drive_letter}/lib")
-        run_command(f"cp -r {nfd}/adafruit_wsgi {drive_letter}/lib")
-        run_command(f"cp {nfd}/boot.py {drive_letter}")
-        run_command(f"cp {nfd}/duckyinpython.py {drive_letter}")
-        run_command(f"cp {nfd}/code.py {drive_letter}")
-        run_command(f"cp {nfd}/keyboard_layout_win_uk.py {drive_letter}/lib")
-        run_command(f"cp {nfd}/keycode_win_uk.py {drive_letter}/lib")
-        update_duckyinpython_file(f"{drive_letter}/duckyinpython.py")
+        run_command(f"cp -r {nfd}/adafruit_hid {pico_drive}/lib")
+        run_command(f"cp {nfd}/adafruit_debouncer.mpy {pico_drive}/lib")
+        run_command(f"cp {nfd}/adafruit_ticks.mpy {pico_drive}/lib")
+        run_command(f"cp -r {nfd}/asyncio {pico_drive}/lib")
+        run_command(f"cp -r {nfd}/adafruit_wsgi {pico_drive}/lib")
+        run_command(f"cp {nfd}/boot.py {pico_drive}")
+        run_command(f"cp {nfd}/duckyinpython.py {pico_drive}")
+        run_command(f"cp {nfd}/code.py {pico_drive}")
+        run_command(f"cp {nfd}/keyboard_layout_win_uk.py {pico_drive}/lib")
+        run_command(f"cp {nfd}/keycode_win_uk.py {pico_drive}/lib")
+        update_duckyinpython_file(f"{pico_drive}/duckyinpython.py")
 
 
 if __name__ == '__main__':

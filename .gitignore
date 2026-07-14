@@ -1,0 +1,5 @@
+necessary_files/
+.venv/
+.idea/
+.history/
+__pycache__/
